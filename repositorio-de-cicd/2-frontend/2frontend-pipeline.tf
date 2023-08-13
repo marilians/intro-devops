@@ -1,11 +1,12 @@
 resource "aws_s3_bucket" "frontend_artifacts" {
   bucket = var.S3FrontEnd
-  acl    = "public-read"
+  #acl    = "public-read"   ** currently this line have a warning deprecated
   policy = data.aws_iam_policy_document.website_policy.json
-  website {
+  /* currently this website block have a warning deprecated 
+    website {
     index_document = "index.html"
     error_document = "index.html"
-  }
+  }*/
 }
 data "aws_iam_policy_document" "website_policy" {
   statement {
@@ -20,6 +21,41 @@ data "aws_iam_policy_document" "website_policy" {
       "arn:aws:s3:::${var.S3FrontEnd}/*"
     ]
   }
+}
+# new resource for website definition 
+resource "aws_s3_bucket_website_configuration" "frontend_artifacts" {
+  bucket = aws_s3_bucket.frontend_artifacts.id
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "error.html"
+  }
+}
+# resource for acl public-read definition
+resource "aws_s3_bucket_ownership_controls" "frontend_ownership" {
+  bucket = aws_s3_bucket.frontend_artifacts.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+resource "aws_s3_bucket_public_access_block" "frontend_pb" {
+  bucket = aws_s3_bucket.frontend_artifacts.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+resource "aws_s3_bucket_acl" "frontend_acl" {
+  depends_on = [
+    aws_s3_bucket_ownership_controls.frontend_ownership,
+    aws_s3_bucket_public_access_block.frontend_pb,
+  ]
+
+  bucket = aws_s3_bucket.frontend_artifacts.id
+  acl    = "public-read"
 }
 resource "aws_codebuild_project" "tf-frontend1" {
   name         = "cicd-build-${var.name_frontend}"
